@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where, documentId } from "firebase/firestore";
+import { collection, getDocs, query, where, documentId, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Fund } from "@/lib/mock-data";
 import { fetchFundById } from "@/lib/services/fundService";
@@ -46,6 +46,58 @@ export async function fetchMembersByFundId(fundId: string): Promise<FundMember[]
   } catch (error) {
     console.error("Error fetching fund members:", error);
     return [];
+  }
+}
+
+export async function fetchTotalContributionByUserId(userId: string): Promise<number> {
+  try {
+    const ref = collection(db, "fund_members");
+    const q = query(ref, where("user_id", "==", userId));
+    const snap = await getDocs(q);
+    return snap.docs.reduce((sum, doc) => {
+      const data = doc.data();
+      const raw = data.contribution_amount ?? data.contributionAmount;
+      const amount = typeof raw === "number" ? raw : (typeof raw === "string" ? Number(raw) || 0 : 0);
+      return sum + amount;
+    }, 0);
+  } catch (error) {
+    console.error("Error fetching total contribution by user:", error);
+    return 0;
+  }
+}
+
+export async function fetchFundsJoinedCountByUserId(userId: string): Promise<number> {
+  try {
+    const ref = collection(db, "fund_members");
+    const q = query(ref, where("user_id", "==", userId));
+    const snap = await getDocs(q);
+    const fundIds = new Set<string>();
+    snap.docs.forEach(doc => {
+      const data = doc.data();
+      const fundId = data.fund_id ?? data.fundId;
+      if (typeof fundId === "string" && fundId.trim() !== "") {
+        fundIds.add(fundId);
+      }
+    });
+    return fundIds.size;
+  } catch (error) {
+    console.error("Error fetching funds joined count by user:", error);
+    return 0;
+  }
+}
+
+export async function refreshUserTotals(userId: string): Promise<{ total_contributed: number; funds_joined: number } | null> {
+  try {
+    const total_contributed = await fetchTotalContributionByUserId(userId);
+    const funds_joined = await fetchFundsJoinedCountByUserId(userId);
+    await updateDoc(doc(db, "users", userId), {
+      total_contributed,
+      funds_joined,
+    });
+    return { total_contributed, funds_joined };
+  } catch (error) {
+    console.error("Error refreshing user totals:", error);
+    return null;
   }
 }
 

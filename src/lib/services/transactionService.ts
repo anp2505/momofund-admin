@@ -11,6 +11,24 @@ export interface Transaction {
   created_at: string;
 }
 
+export interface TransactionStats {
+  totalTransactions: number;
+  totalDeposit: number;
+  totalWithdraw: number;
+  totalAmount: number;
+  netAmount: number;
+}
+
+function normalizeNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return value === "" ? 0 : Number(value) || 0;
+  return 0;
+}
+
+function getTransactionSign(type: string) {
+  return type === "WITHDRAW" ? -1 : 1;
+}
+
 export async function fetchTransactionsByFundId(fundId: string): Promise<Transaction[]> {
   try {
     const ref = collection(db, "transactions");
@@ -28,7 +46,7 @@ export async function fetchTransactionsByFundId(fundId: string): Promise<Transac
       const created = get<any>("created_at", "createdAt");
       const createdStr = created?.toDate ? (created as any).toDate().toISOString() : (typeof created === "string" ? created : "");
       const rawAmount = get<unknown>("amount");
-      const amount = typeof rawAmount === "number" ? rawAmount : (typeof rawAmount === "string" ? Number(rawAmount) || 0 : 0);
+      const amount = normalizeNumber(rawAmount);
 
       return {
         transaction_id: doc.id,
@@ -46,19 +64,41 @@ export async function fetchTransactionsByFundId(fundId: string): Promise<Transac
   }
 }
 
-export async function fetchTransactionStats(fundId: string) {
+export async function fetchTransactionStats(fundId: string): Promise<TransactionStats> {
   try {
     const transactions = await fetchTransactionsByFundId(fundId);
-    const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalDeposit = transactions
+      .filter(tx => tx.type === "DEPOSIT")
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    const totalWithdraw = transactions
+      .filter(tx => tx.type === "WITHDRAW")
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    const totalAmount = totalDeposit;
     return {
       totalTransactions: transactions.length,
+      totalDeposit,
+      totalWithdraw,
       totalAmount,
+      netAmount: totalDeposit - totalWithdraw,
     };
   } catch (error) {
     console.error("Error fetching transaction stats:", error);
     return {
       totalTransactions: 0,
+      totalDeposit: 0,
+      totalWithdraw: 0,
       totalAmount: 0,
+      netAmount: 0,
     };
+  }
+}
+
+export async function fetchFundBalanceFromTransactions(fundId: string): Promise<number> {
+  try {
+    const stats = await fetchTransactionStats(fundId);
+    return stats.netAmount;
+  } catch (error) {
+    console.error("Error fetching fund balance from transactions:", error);
+    return 0;
   }
 }

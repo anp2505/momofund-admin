@@ -1,9 +1,10 @@
 import {
   collection, getDocs, query, where,
-  doc, getDoc, Timestamp,
+  doc, getDoc, updateDoc, Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Fund } from "@/lib/mock-data";
+import { fetchTransactionStats } from "@/lib/services/transactionService";
 
 /**
  * Chuyển một Firestore document thành Fund object
@@ -92,6 +93,20 @@ export async function fetchFundsByOwner(ownerId: string): Promise<Fund[]> {
   } catch (error) {
     console.error("Error fetching funds by owner:", error);
     return [];
+  }
+}
+
+export async function refreshFundCurrentBalance(fundId: string): Promise<number | null> {
+  try {
+    const stats = await fetchTransactionStats(fundId);
+    const balance = stats.netAmount;
+    await updateDoc(doc(db, "funds", fundId), {
+      current_balance: balance,
+    });
+    return balance;
+  } catch (error) {
+    console.error("Error refreshing fund current balance:", error);
+    return null;
   }
 }
 
