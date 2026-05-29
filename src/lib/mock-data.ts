@@ -35,17 +35,18 @@ export interface Fund {
 }
 
 export interface Report {
-  report_id: string;
-  reporter_id: string;
-  reporter_name: string;
-  target_type: "USER" | "FUND";
-  target_id: string;
-  target_name: string;
+  reportId: string;
+  reporterId: string;
+  reporterName: string;
+  targetType: "USER" | "FUND";
+  targetId: string;
+  targetName: string;
   reason: string;
-  report_status: ReportStatus;
-  resolution_note?: string;
-  created_at: string;
-  handled_at?: string;
+  reportStatus: ReportStatus;
+  resolutionNote?: string;
+  createdAt: string;
+  handledAt?: string;
+  handledBy?: string;
 }
 
 export interface ActivityLog {
@@ -85,7 +86,7 @@ export interface Transaction {
 export { fetchUsers, fetchUserById, fetchUsersByFilter, getUserStats, updateUserLockStatus } from "@/lib/services/userService";
 export { fetchFunds, fetchFundById, fetchFundsByStatus, fetchFundsByOwner, getFundStats } from "@/lib/services/fundService";
 export { fetchReports, fetchReportById, fetchReportsByStatus, fetchReportsByTarget, getReportStats, updateReportStatus } from "@/lib/services/reportService";
-export { fetchActivityLogs, fetchActivityLogsByActor, fetchActivityLogsByAction, fetchActivityLogsByTarget } from "@/lib/services/activityService";
+export { fetchActivityLogs, fetchActivityLogsByActor, fetchActivityLogsByAction, fetchActivityLogsByTarget, createActivityLog } from "@/lib/services/activityService";
 export { fetchUserGrowthData, fetchTransactionVolumeData, fetchFundStatusData, fetchDashboardStats } from "@/lib/services/analyticsService";
 export { fetchMembersByFundId, fetchFundsByUserId } from "@/lib/services/memberService";
 export { fetchTransactionsByFundId, fetchTransactionStats } from "@/lib/services/transactionService";

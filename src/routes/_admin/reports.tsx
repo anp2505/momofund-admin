@@ -47,14 +47,14 @@ function ReportsPage() {
     if (!note.trim()) { toast.error("Vui lòng nhập ghi chú xử lý"); return; }
 
     const newStatus = mode === "RESOLVE" ? "RESOLVED" : "DISMISSED";
-    const success = await updateReportStatus(selected.report_id, newStatus, note, "system_admin");
+    const success = await updateReportStatus(selected.reportId, newStatus, note, "system_admin");
     if (!success) {
       toast.error("Không thể cập nhật báo cáo");
       return;
     }
 
-    const updatedReport = { ...selected, report_status: newStatus as ReportStatus, resolution_note: note, handled_at: new Date().toISOString() };
-    setReports(prev => prev.map(r => r.report_id === selected.report_id ? updatedReport : r));
+    const updatedReport = { ...selected, reportStatus: newStatus as ReportStatus, resolutionNote: note, handledAt: new Date().toISOString() };
+    setReports(prev => prev.map(r => r.reportId === selected.reportId ? updatedReport : r));
     setSelected(updatedReport);
     toast.success(mode === "RESOLVE" ? "Báo cáo đã được xử lý" : "Báo cáo đã bị bác");
     setMode(null);
@@ -78,7 +78,7 @@ function ReportsPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {columns.map(col => {
-          const items = reports.filter(r => r.report_status === col.status);
+          const items = reports.filter(r => r.reportStatus === col.status);
           return (
             <div key={col.status} className={`rounded-2xl border bg-gradient-to-b ${col.tone} backdrop-blur p-4`}>
               <div className="mb-3 flex items-center justify-between">
@@ -94,20 +94,20 @@ function ReportsPage() {
                   </div>
                 ) : items.map((r, i) => (
                   <motion.button
-                    key={r.report_id} onClick={() => setSelected(r)}
+                    key={r.reportId} onClick={() => setSelected(r)}
                     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                     className="block w-full rounded-xl border border-border/60 bg-card p-4 text-left shadow-card transition-all hover:-translate-y-0.5 hover:shadow-glow"
                   >
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-[10px] font-mono text-muted-foreground">{r.report_id}</span>
-                      <StatusBadge status={r.report_status} />
+                      <span className="text-[10px] font-mono text-muted-foreground">{r.reportId}</span>
+                      <StatusBadge status={r.reportStatus} />
                     </div>
                     <p className="line-clamp-2 text-sm font-medium">{r.reason}</p>
                     <div className="mt-3 flex items-center justify-between text-xs">
-                      <span className="rounded-full bg-secondary px-2 py-0.5 font-semibold">{r.target_type}</span>
-                      <span className="text-muted-foreground">{formatDateTime(r.created_at)}</span>
+                      <span className="rounded-full bg-secondary px-2 py-0.5 font-semibold">{r.targetType}</span>
+                      <span className="text-muted-foreground">{formatDateTime(r.createdAt)}</span>
                     </div>
-                    <p className="mt-2 truncate text-xs text-muted-foreground">Đối tượng: {r.target_name}</p>
+                    <p className="mt-2 truncate text-xs text-muted-foreground">Đối tượng: {r.targetName}</p>
                   </motion.button>
                 ))}
               </div>
@@ -123,7 +123,7 @@ function ReportsPage() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <ShieldAlert className="size-5 text-primary" />
-                  Chi tiết báo cáo {selected.report_id}
+                  Chi tiết báo cáo {selected.reportId}
                 </DialogTitle>
                 <DialogDescription>Xem xét đầy đủ thông tin trước khi đưa ra quyết định xử lý.</DialogDescription>
               </DialogHeader>
@@ -133,15 +133,15 @@ function ReportsPage() {
                   <p className="mt-1 font-medium">{selected.reason}</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Người báo cáo" value={selected.reporter_name} />
-                  <Field label="Đối tượng" value={`${selected.target_name} (${selected.target_type})`} />
-                  <Field label="Thời gian gửi" value={formatDateTime(selected.created_at)} />
-                  <Field label="Trạng thái" value={selected.report_status} />
+                  <Field label="Người báo cáo" value={selected.reporterName} />
+                  <Field label="Đối tượng" value={`${selected.targetName} (${selected.targetType})`} />
+                  <Field label="Thời gian gửi" value={formatDateTime(selected.createdAt)} />
+                  <Field label="Trạng thái" value={selected.reportStatus} />
                 </div>
                 <div className="rounded-xl border border-border/60 p-4">
                   <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Báo cáo liên quan</p>
                   <p className="text-sm font-medium">
-                    {reports.filter(r => r.target_id === selected.target_id).length} báo cáo cùng đối tượng
+                    {reports.filter(r => r.targetId === selected.targetId).length} báo cáo cùng đối tượng
                   </p>
                 </div>
               </div>

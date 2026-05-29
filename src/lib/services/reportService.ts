@@ -2,19 +2,59 @@ import { collection, getDocs, query, where, getDoc, doc, updateDoc, Timestamp } 
 import { db } from "@/lib/firebase";
 import type { Report, ReportStatus } from "@/lib/mock-data";
 
+function getField<T>(data: Record<string, unknown>, ...keys: string[]): T | undefined {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(data, key) && data[key] != null) {
+      return data[key] as T;
+    }
+  }
+  return undefined;
+}
+
+function normalizeTimestamp(value: unknown): string {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (typeof value === "string") return value;
+  return "";
+}
+
+function normalizeStatus(status: unknown): ReportStatus {
+  const normalized = String(status ?? "").toUpperCase();
+  if (normalized === "PENDING" || normalized === "RESOLVED" || normalized === "DISMISSED") {
+    return normalized as ReportStatus;
+  }
+  return "PENDING";
+}
+
+function docToReport(docSnap: { id: string; data: () => Record<string, unknown> }): Report {
+  const data = docSnap.data();
+
+  return {
+    reportId: docSnap.id,
+    reporterId: getField<string>(data, "reporterId", "reporter_id") ?? "",
+    reporterName: getField<string>(data, "reporterName", "reporter_name") ?? "",
+    targetType: (getField<string>(data, "targetType", "target_type")?.toUpperCase() as "USER" | "FUND") ?? "USER",
+    targetId: getField<string>(data, "targetId", "target_id") ?? "",
+    targetName: getField<string>(data, "targetName", "target_name") ?? "",
+    reason: getField<string>(data, "reason") ?? "",
+    reportStatus: normalizeStatus(getField<string>(data, "reportStatus", "report_status", "status")),
+    resolutionNote: getField<string>(data, "resolutionNote", "resolution_note"),
+    createdAt: normalizeTimestamp(getField<unknown>(data, "createdAt", "created_at")),
+    handledAt: normalizeTimestamp(getField<unknown>(data, "handledAt", "handled_at")),
+    handledBy: getField<string>(data, "handledBy", "handled_by"),
+  };
+}
+
 export async function fetchReports(startDate?: Date, endDate?: Date): Promise<Report[]> {
   try {
     const reportsRef = collection(db, "reports");
     const querySnapshot = await getDocs(reportsRef);
-    let reports = querySnapshot.docs.map(doc => ({
-      report_id: doc.id,
-      ...doc.data()
-    } as Report));
-    
+    let reports = querySnapshot.docs.map(docToReport);
+
     if (startDate || endDate) {
       reports = reports.filter(r => {
-        if (!r.created_at) return true;
-        const d = new Date(r.created_at);
+        if (!r.createdAt) return true;
+        const d = new Date(r.createdAt);
+        if (isNaN(d.getTime())) return true;
         if (startDate && d < startDate) return false;
         if (endDate && d > endDate) return false;
         return true;
@@ -32,10 +72,7 @@ export async function fetchReportById(reportId: string): Promise<Report | null> 
     const reportRef = doc(db, "reports", reportId);
     const snap = await getDoc(reportRef);
     if (!snap.exists()) return null;
-    return {
-      report_id: snap.id,
-      ...snap.data()
-    } as Report;
+    return docToReport(snap);
   } catch (error) {
     console.error("Error fetching report:", error);
     return null;
@@ -50,10 +87,15 @@ export async function updateReportStatus(
 ): Promise<boolean> {
   try {
     const reportRef = doc(db, "reports", reportId);
+    const now = Timestamp.now();
     await updateDoc(reportRef, {
+      reportStatus: status,
       report_status: status,
+      resolutionNote: note,
       resolution_note: note,
-      handled_at: Timestamp.now(),
+      handledAt: now,
+      handled_at: now,
+      handledBy: adminId,
       handled_by: adminId,
     });
     return true;
@@ -66,12 +108,11 @@ export async function updateReportStatus(
 export async function fetchReportsByStatus(status: ReportStatus): Promise<Report[]> {
   try {
     const reportsRef = collection(db, "reports");
-    const q = query(reportsRef, where("report_status", "==", status));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      report_id: doc.id,
-      ...doc.data()
-    } as Report));
+    let querySnapshot = await getDocs(query(reportsRef, where("reportStatus", "==", status)));
+    if (querySnapshot.empty) {
+      querySnapshot = await getDocs(query(reportsRef, where("report_status", "==", status)));
+    }
+    return querySnapshot.docs.map(docToReport);
   } catch (error) {
     console.error("Error fetching reports by status:", error);
     return [];
@@ -81,12 +122,11 @@ export async function fetchReportsByStatus(status: ReportStatus): Promise<Report
 export async function fetchReportsByTarget(targetId: string): Promise<Report[]> {
   try {
     const reportsRef = collection(db, "reports");
-    const q = query(reportsRef, where("target_id", "==", targetId));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      report_id: doc.id,
-      ...doc.data()
-    } as Report));
+    let querySnapshot = await getDocs(query(reportsRef, where("targetId", "==", targetId)));
+    if (querySnapshot.empty) {
+      querySnapshot = await getDocs(query(reportsRef, where("target_id", "==", targetId)));
+    }
+    return querySnapshot.docs.map(docToReport);
   } catch (error) {
     console.error("Error fetching reports by target:", error);
     return [];
@@ -98,9 +138,9 @@ export async function getReportStats() {
     const reports = await fetchReports();
     return {
       total: reports.length,
-      pending: reports.filter(r => r.report_status === "PENDING").length,
-      resolved: reports.filter(r => r.report_status === "RESOLVED").length,
-      dismissed: reports.filter(r => r.report_status === "DISMISSED").length,
+      pending: reports.filter(r => r.reportStatus === "PENDING").length,
+      resolved: reports.filter(r => r.reportStatus === "RESOLVED").length,
+      dismissed: reports.filter(r => r.reportStatus === "DISMISSED").length,
     };
   } catch (error) {
     console.error("Error getting report stats:", error);

@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, Lock, Unlock, Mail, Phone, Calendar, Wallet, AlertTriangle, Loader } from "lucide-react";
-import { fetchUserById, fetchFundsByUserId, updateUserLockStatus, formatDateTime, formatVND, formatDate, type User, type Fund } from "@/lib/mock-data";
+import { fetchUserById, fetchFundsByUserId, updateUserLockStatus, createActivityLog, formatDateTime, formatVND, formatDate, type User, type Fund } from "@/lib/mock-data";
+import { auth } from "@/lib/firebase";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -25,6 +26,7 @@ function UserDetail() {
   const [userFunds, setUserFunds] = useState<Fund[]>([]);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [opLoading, setOpLoading] = useState(false);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -66,17 +68,22 @@ function UserDetail() {
   const handleLock = async () => {
     if (!reason.trim()) { toast.error("Vui lòng nhập lý do khóa tài khoản"); return; }
     if (!user) return;
-
-    const success = await updateUserLockStatus(user.user_id, true, reason);
-    if (!success) {
-      toast.error("Không thể khóa tài khoản");
-      return;
+    if (opLoading) return;
+    try {
+      setOpLoading(true);
+      const success = await updateUserLockStatus(user.user_id, true, reason);
+      if (!success) {
+        toast.error("Không thể khóa tài khoản");
+        return;
+      }
+      setUser({ ...user, account_status: "LOCKED", locked_at: new Date().toISOString(), locked_reason: reason });
+      toast.success(`Đã khóa tài khoản ${user.full_name}`);
+      try { await createActivityLog(auth.currentUser?.uid || "system", "LOCK_USER", "USER", user.user_id, `Khóa tài khoản: ${reason}`); } catch (e) { console.error(e); }
+      setOpen(false);
+      setReason("");
+    } finally {
+      setOpLoading(false);
     }
-
-    setUser({ ...user, account_status: "LOCKED", locked_at: new Date().toISOString(), locked_reason: reason });
-    toast.success(`Đã khóa tài khoản ${user.full_name}`);
-    setOpen(false);
-    setReason("");
   };
 
   return (
@@ -108,21 +115,30 @@ function UserDetail() {
               {user.account_status === "ACTIVE" ? (
                 <button
                   onClick={() => setOpen(true)}
-                  disabled={isAdmin}
+                  disabled={isAdmin || opLoading}
                   className="bg-gradient-to-r from-destructive to-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-glow transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
                   title={isAdmin ? "Không thể khóa Admin" : ""}
                 >
                   <Lock className="size-4" />Khóa tài khoản
                 </button>
               ) : (
-                <button onClick={async () => {
-                  if (!user) return;
-                  const success = await updateUserLockStatus(user.user_id, false);
-                  if (success) {
-                    setUser({ ...user, account_status: "ACTIVE", locked_at: undefined, locked_reason: undefined });
-                    toast.success("Đã mở khóa tài khoản");
-                  } else {
-                    toast.error("Không thể mở khóa tài khoản");
+                <button disabled={opLoading} onClick={async () => {
+                  if (!user || opLoading) return;
+                  try {
+                    setOpLoading(true);
+                    const success = await updateUserLockStatus(user.user_id, false);
+                    if (success) {
+                      setUser({ ...user, account_status: "ACTIVE", locked_at: undefined, locked_reason: undefined });
+                      toast.success("Đã mở khóa tài khoản");
+                      try { await createActivityLog(auth.currentUser?.uid || "system", "UNLOCK_USER", "USER", user.user_id, `Mở khóa tài khoản`); } catch (e) { console.error(e); }
+                    } else {
+                      toast.error("Không thể mở khóa tài khoản");
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Lỗi khi mở khóa tài khoản");
+                  } finally {
+                    setOpLoading(false);
                   }
                 }}
                   className="bg-gradient-to-r from-success to-accent inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-glow hover:scale-[1.02]">

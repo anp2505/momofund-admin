@@ -97,7 +97,7 @@ function FundDetail() {
                   <StatusBadge status={fund.fund_status} />
                   <StatusBadge status={fund.privacy_type} />
                 </div>
-                <p className="text-sm text-muted-foreground">Chủ quỹ: <Link to="/users/$userId" params={{ userId: fund.owner_id }} className="text-primary hover:underline">{fund.owner_name}</Link></p>
+                <p className="text-sm text-muted-foreground">Chủ quỹ: <Link to="/_admin/users/$userId" params={{ userId: fund.owner_id }} className="text-primary hover:underline">{fund.owner_name}</Link></p>
               </div>
             </div>
           </div>
