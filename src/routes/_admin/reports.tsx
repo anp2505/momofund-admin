@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { ShieldAlert, CheckCircle2, XCircle, Search as SearchIcon, AlertTriangle } from "lucide-react";
-import { reports, formatDateTime, type Report, type ReportStatus } from "@/lib/mock-data";
+import { ShieldAlert, CheckCircle2, XCircle, Search as SearchIcon, AlertTriangle, Loader } from "lucide-react";
+import { fetchReports, formatDateTime, updateReportStatus, type Report, type ReportStatus } from "@/lib/mock-data";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
@@ -24,12 +24,50 @@ function ReportsPage() {
   const [selected, setSelected] = useState<Report | null>(null);
   const [mode, setMode] = useState<"RESOLVE" | "DISMISS" | null>(null);
   const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<Report[]>([]);
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    const loadReports = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchReports();
+        setReports(data);
+      } catch (error) {
+        console.error("Error loading reports:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadReports();
+  }, []);
+
+  const handleSubmit = async () => {
+    if (!selected) return;
     if (!note.trim()) { toast.error("Vui lòng nhập ghi chú xử lý"); return; }
+
+    const newStatus = mode === "RESOLVE" ? "RESOLVED" : "DISMISSED";
+    const success = await updateReportStatus(selected.report_id, newStatus, note, "system_admin");
+    if (!success) {
+      toast.error("Không thể cập nhật báo cáo");
+      return;
+    }
+
+    const updatedReport = { ...selected, report_status: newStatus as ReportStatus, resolution_note: note, handled_at: new Date().toISOString() };
+    setReports(prev => prev.map(r => r.report_id === selected.report_id ? updatedReport : r));
+    setSelected(updatedReport);
     toast.success(mode === "RESOLVE" ? "Báo cáo đã được xử lý" : "Báo cáo đã bị bác");
-    setMode(null); setSelected(null); setNote("");
+    setMode(null);
+    setNote("");
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -101,12 +139,10 @@ function ReportsPage() {
                   <Field label="Trạng thái" value={selected.report_status} />
                 </div>
                 <div className="rounded-xl border border-border/60 p-4">
-                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Activity logs liên quan</p>
-                  <ul className="space-y-1.5 text-xs text-muted-foreground">
-                    <li>• Người báo cáo đã gửi 2 báo cáo trong 30 ngày qua</li>
-                    <li>• Đối tượng có 1 báo cáo trước đó (DISMISSED)</li>
-                    <li>• Không có dấu hiệu giao dịch bất thường</li>
-                  </ul>
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Báo cáo liên quan</p>
+                  <p className="text-sm font-medium">
+                    {reports.filter(r => r.target_id === selected.target_id).length} báo cáo cùng đối tượng
+                  </p>
                 </div>
               </div>
               <DialogFooter className="flex flex-wrap gap-2">

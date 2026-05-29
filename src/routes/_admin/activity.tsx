@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Download, Search } from "lucide-react";
-import { activityLogs, formatDateTime } from "@/lib/mock-data";
+import { Download, Search, Loader } from "lucide-react";
+import { fetchActivityLogs, formatDateTime, type ActivityLog } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/_admin/activity")({
   head: () => ({ meta: [{ title: "Nhật ký hoạt động — MomoFund Admin" }] }),
@@ -20,9 +20,35 @@ const actionColors: Record<string, string> = {
 
 function ActivityPage() {
   const [q, setQ] = useState("");
-  const filtered = activityLogs.filter(l =>
+  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+
+  useEffect(() => {
+    const loadLogs = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchActivityLogs(100);
+        setLogs(data);
+      } catch (error) {
+        console.error("Error loading activity logs:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadLogs();
+  }, []);
+
+  const filtered = logs.filter(l =>
     !q || l.actor_name.toLowerCase().includes(q.toLowerCase()) || l.action.toLowerCase().includes(q.toLowerCase())
   );
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

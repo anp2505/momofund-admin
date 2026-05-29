@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, Lock, Unlock, Mail, Phone, Calendar, Wallet, AlertTriangle } from "lucide-react";
-import { users, funds, formatDateTime, formatVND, formatDate } from "@/lib/mock-data";
+import { ArrowLeft, Lock, Unlock, Mail, Phone, Calendar, Wallet, AlertTriangle, Loader } from "lucide-react";
+import { fetchUserById, fetchFundsByUserId, updateUserLockStatus, formatDateTime, formatVND, formatDate, type User, type Fund } from "@/lib/mock-data";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -20,19 +20,63 @@ export const Route = createFileRoute("/_admin/users/$userId")({
 function UserDetail() {
   const { userId } = Route.useParams();
   const navigate = useNavigate();
-  const user = users.find(u => u.user_id === userId);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [userFunds, setUserFunds] = useState<Fund[]>([]);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
 
-  if (!user) return <div>Không tìm thấy người dùng.</div>;
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        setLoading(true);
+        const userData = await fetchUserById(userId);
+        if (!userData) {
+          navigate({ to: "/users" });
+          return;
+        }
+        setUser(userData);
 
-  const userFunds = funds.slice(0, user.funds_joined > 4 ? 4 : user.funds_joined);
+        const fundsJoined = await fetchFundsByUserId(userId);
+        setUserFunds(fundsJoined.slice(0, Math.min(4, fundsJoined.length)));
+      } catch (error) {
+        console.error("Error loading user:", error);
+        toast.error("Không thể tải thông tin người dùng");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUser();
+  }, [userId, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <div className="p-4 text-center text-muted-foreground">Không tìm thấy người dùng.</div>;
+  }
+
   const isAdmin = user.role === "ADMIN";
 
-  const handleLock = () => {
+  const handleLock = async () => {
     if (!reason.trim()) { toast.error("Vui lòng nhập lý do khóa tài khoản"); return; }
+    if (!user) return;
+
+    const success = await updateUserLockStatus(user.user_id, true, reason);
+    if (!success) {
+      toast.error("Không thể khóa tài khoản");
+      return;
+    }
+
+    setUser({ ...user, account_status: "LOCKED", locked_at: new Date().toISOString(), locked_reason: reason });
     toast.success(`Đã khóa tài khoản ${user.full_name}`);
-    setOpen(false); setReason("");
+    setOpen(false);
+    setReason("");
   };
 
   return (
@@ -71,7 +115,16 @@ function UserDetail() {
                   <Lock className="size-4" />Khóa tài khoản
                 </button>
               ) : (
-                <button onClick={() => toast.success("Đã mở khóa tài khoản")}
+                <button onClick={async () => {
+                  if (!user) return;
+                  const success = await updateUserLockStatus(user.user_id, false);
+                  if (success) {
+                    setUser({ ...user, account_status: "ACTIVE", locked_at: undefined, locked_reason: undefined });
+                    toast.success("Đã mở khóa tài khoản");
+                  } else {
+                    toast.error("Không thể mở khóa tài khoản");
+                  }
+                }}
                   className="bg-gradient-to-r from-success to-accent inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-glow hover:scale-[1.02]">
                   <Unlock className="size-4" />Mở khóa
                 </button>

@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   AreaChart, Area, RadialBarChart, RadialBar, Legend,
 } from "recharts";
-import { userGrowthData, transactionVolumeData, fundStatusData } from "@/lib/mock-data";
+import { fetchUserGrowthData, fetchTransactionVolumeData, fetchFundStatusData, fetchUsers } from "@/lib/mock-data";
+import { Loader } from "lucide-react";
 
 export const Route = createFileRoute("/_admin/analytics")({
   head: () => ({ meta: [{ title: "Thống kê hệ thống — MomoFund Admin" }] }),
@@ -11,6 +13,58 @@ export const Route = createFileRoute("/_admin/analytics")({
 });
 
 function AnalyticsPage() {
+  const [loading, setLoading] = useState(true);
+  const [userGrowthData, setUserGrowthData] = useState<any[]>([]);
+  const [transactionVolumeData, setTransactionVolumeData] = useState<any[]>([]);
+  const [fundStatusData, setFundStatusData] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState({ active: 0, locked: 0, admin: 0, inactive: 0 });
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [users, userGrowth, txVolume, fundStatus] = await Promise.all([
+          fetchUsers(),
+          fetchUserGrowthData(),
+          fetchTransactionVolumeData(),
+          fetchFundStatusData(),
+        ]);
+        setUserGrowthData(userGrowth);
+        setTransactionVolumeData(txVolume);
+        setFundStatusData(fundStatus);
+
+        const total = Math.max(users.length, 1);
+        const activeCount = users.filter(u => u.account_status === "ACTIVE").length;
+        const lockedCount = users.filter(u => u.account_status === "LOCKED").length;
+        const adminCount = users.filter(u => u.role === "ADMIN").length;
+        const inactiveCount = users.filter(u => {
+          const last = new Date(u.last_login_at);
+          return !isNaN(last.getTime()) && Date.now() - last.getTime() > 30 * 24 * 60 * 60 * 1000;
+        }).length;
+
+        setUserStats({
+          active: Math.round((activeCount / total) * 100),
+          locked: Math.round((lockedCount / total) * 100),
+          admin: Math.round((adminCount / total) * 100),
+          inactive: Math.round((inactiveCount / total) * 100),
+        });
+      } catch (error) {
+        console.error("Error loading analytics data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -61,10 +115,10 @@ function AnalyticsPage() {
 
         <Panel title="Tỉ lệ Active vs Locked" subtitle="Người dùng">
           <div className="flex h-[280px] flex-col justify-center gap-4 p-4">
-            <Metric label="Active users" pct={92} color="oklch(0.68 0.17 155)" />
-            <Metric label="Locked accounts" pct={4} color="oklch(0.6 0.24 25)" />
-            <Metric label="Admin" pct={1} color="oklch(0.58 0.22 348)" />
-            <Metric label="Inactive >30d" pct={18} color="oklch(0.62 0.22 295)" />
+            <Metric label="Active users" pct={userStats.active} color="oklch(0.68 0.17 155)" />
+            <Metric label="Locked accounts" pct={userStats.locked} color="oklch(0.6 0.24 25)" />
+            <Metric label="Admin" pct={userStats.admin} color="oklch(0.58 0.22 348)" />
+            <Metric label="Inactive >30d" pct={userStats.inactive} color="oklch(0.62 0.22 295)" />
           </div>
         </Panel>
       </div>

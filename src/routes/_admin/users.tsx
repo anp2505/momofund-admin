@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "motion/react";
-import { Search, Filter, MoreHorizontal, Eye, Lock, Unlock, Download } from "lucide-react";
-import { users, formatDateTime, formatVND } from "@/lib/mock-data";
+import { Search, Filter, MoreHorizontal, Eye, Lock, Unlock, Download, Loader, Wallet, TrendingUp, Users as UsersIcon } from "lucide-react";
+import { fetchUsers, formatDateTime, formatVND, type User } from "@/lib/mock-data";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -17,6 +17,23 @@ export const Route = createFileRoute("/_admin/users")({
 function UsersPage() {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"ALL" | "ACTIVE" | "LOCKED" | "ADMIN">("ALL");
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchUsers();
+        setUsers(data);
+      } catch (error) {
+        console.error("Error loading users:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUsers();
+  }, []);
 
   const filtered = useMemo(() => {
     return users.filter(u => {
@@ -28,30 +45,43 @@ function UsersPage() {
         (filter === "LOCKED" && u.account_status === "LOCKED");
       return matchQ && matchF;
     });
-  }, [q, filter]);
+  }, [q, filter, users]);
+
+  const totalContributed = users.reduce((sum, u) => sum + u.total_contributed, 0);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Quản lý người dùng</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Tổng cộng {users.length.toLocaleString("vi-VN")} người dùng trong hệ thống</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tổng cộng {users.length.toLocaleString("vi-VN")} người dùng — tổng đóng góp {formatVND(totalContributed)}
+          </p>
         </div>
         <button className="bg-gradient-primary inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow transition-transform hover:scale-[1.02]">
           <Download className="size-4" />Xuất CSV
         </button>
       </motion.div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MiniStat label="Tổng" value={users.length} tone="primary" />
-        <MiniStat label="Đang hoạt động" value={users.filter(u => u.account_status === "ACTIVE").length} tone="success" />
-        <MiniStat label="Bị khóa" value={users.filter(u => u.account_status === "LOCKED").length} tone="destructive" />
-        <MiniStat label="Admin" value={users.filter(u => u.role === "ADMIN").length} tone="accent" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <MiniStat label="Tổng" value={users.length.toLocaleString("vi-VN")} icon={UsersIcon} />
+        <MiniStat label="Đang hoạt động" value={users.filter(u => u.account_status === "ACTIVE").length.toLocaleString("vi-VN")} icon={TrendingUp} />
+        <MiniStat label="Bị khóa" value={users.filter(u => u.account_status === "LOCKED").length.toLocaleString("vi-VN")} icon={Lock} />
+        <MiniStat label="Admin" value={users.filter(u => u.role === "ADMIN").length.toLocaleString("vi-VN")} icon={UsersIcon} />
+        <MiniStat label="Tổng đóng góp" value={formatVND(totalContributed)} icon={Wallet} />
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card shadow-card">
         <div className="flex flex-wrap items-center gap-3 border-b border-border/60 p-4">
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative flex-1 min-w-60">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={q} onChange={e => setQ(e.target.value)}
@@ -148,17 +178,16 @@ function UsersPage() {
   );
 }
 
-function MiniStat({ label, value, tone }: { label: string; value: number; tone: "primary" | "success" | "destructive" | "accent" }) {
-  const map = {
-    primary: "from-primary/10 to-transparent border-primary/20",
-    success: "from-success/10 to-transparent border-success/20",
-    destructive: "from-destructive/10 to-transparent border-destructive/20",
-    accent: "from-accent/10 to-transparent border-accent/20",
-  };
+function MiniStat({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Wallet }) {
   return (
-    <div className={`rounded-2xl border bg-gradient-to-br ${map[tone]} p-4`}>
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value.toLocaleString("vi-VN")}</p>
+    <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 shadow-card">
+      <div className="bg-gradient-accent flex size-10 items-center justify-center rounded-xl text-white">
+        <Icon className="size-5" />
+      </div>
+      <div>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="mt-1 text-2xl font-bold">{value}</p>
+      </div>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "motion/react";
-import { Search, Wallet, TrendingUp, Users as UsersIcon } from "lucide-react";
-import { funds, formatVND, formatDate } from "@/lib/mock-data";
+import { Search, Wallet, TrendingUp, Users as UsersIcon, Loader } from "lucide-react";
+import { fetchFunds, formatVND, formatDate, type Fund } from "@/lib/mock-data";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Progress } from "@/components/ui/progress";
 
@@ -14,14 +14,39 @@ export const Route = createFileRoute("/_admin/funds")({
 function FundsPage() {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"ALL" | "ACTIVE" | "PAUSED" | "CLOSED">("ALL");
+  const [loading, setLoading] = useState(true);
+  const [funds, setFunds] = useState<Fund[]>([]);
+
+  useEffect(() => {
+    const loadFunds = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchFunds();
+        setFunds(data);
+      } catch (error) {
+        console.error("Error loading funds:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadFunds();
+  }, []);
 
   const filtered = useMemo(() => funds.filter(f => {
     const matchQ = !q || f.fund_name.toLowerCase().includes(q.toLowerCase()) || f.owner_name.toLowerCase().includes(q.toLowerCase());
     const matchF = filter === "ALL" || f.fund_status === filter;
     return matchQ && matchF;
-  }), [q, filter]);
+  }), [q, filter, funds]);
 
   const totalBalance = funds.reduce((s, f) => s + f.current_balance, 0);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

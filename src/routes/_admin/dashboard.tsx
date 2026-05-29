@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { motion } from "motion/react";
 import {
   Users, Wallet, ArrowLeftRight, ShieldAlert, Banknote,
-  UserPlus, Sparkles, AlertCircle,
+  UserPlus, Sparkles, AlertCircle, Loader,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -11,8 +14,8 @@ import {
 import { StatCard } from "@/components/admin/StatCard";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
-  dashboardStats, userGrowthData, transactionVolumeData, fundStatusData,
-  users, funds, reports, formatVND, formatDateTime,
+  fetchUsers, fetchFunds, fetchReports, fetchUserGrowthData, fetchTransactionVolumeData, fetchFundStatusData, fetchDashboardStats,
+  formatVND, formatDateTime, type User, type Fund, type Report,
 } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/_admin/dashboard")({
@@ -21,9 +24,64 @@ export const Route = createFileRoute("/_admin/dashboard")({
 });
 
 function DashboardPage() {
-  const recentUsers = users.slice(0, 4);
-  const recentFunds = funds.slice(0, 3);
-  const recentReports = reports.filter(r => r.report_status === "PENDING").slice(0, 3);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ totalUsers: 0, totalFunds: 0, totalTransactions: 0, pendingReports: 0, totalCirculating: 0 });
+  const [recentUsers, setRecentUsers] = useState<User[]>([]);
+  const [recentFunds, setRecentFunds] = useState<Fund[]>([]);
+  const [recentReports, setRecentReports] = useState<Report[]>([]);
+  const [userGrowthData, setUserGrowthData] = useState<any[]>([]);
+  const [transactionVolumeData, setTransactionVolumeData] = useState<any[]>([]);
+  const [fundStatusData, setFundStatusData] = useState<any[]>([]);
+
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [users, funds, reports, statsData, userGrowth, txVolume, fundStatus] = await Promise.all([
+          fetchUsers(),
+          fetchFunds(),
+          fetchReports(),
+          fetchDashboardStats(),
+          fetchUserGrowthData(),
+          fetchTransactionVolumeData(),
+          fetchFundStatusData(),
+        ]);
+
+        setRecentUsers(users.slice(0, 4));
+        setRecentFunds(funds.slice(0, 3));
+        setRecentReports(reports.filter(r => r.report_status === "PENDING").slice(0, 3));
+        setStats(statsData as any);
+        setUserGrowthData(userGrowth);
+        setTransactionVolumeData(txVolume);
+        setFundStatusData(fundStatus);
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Only load when authenticated (Firestore rules likely require auth)
+    unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loadData();
+      } else {
+        // not authenticated: stop loading and leave stats at 0
+        setLoading(false);
+      }
+    });
+
+    return () => unsub?.();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -35,11 +93,11 @@ function DashboardPage() {
       </motion.div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Tổng người dùng" value={dashboardStats.totalUsers.toLocaleString("vi-VN")} delta="+12.4% tuần này" icon={Users} accent="primary" index={0} />
-        <StatCard label="Tổng quỹ" value={dashboardStats.totalFunds.toLocaleString("vi-VN")} delta="+8.2%" icon={Wallet} accent="accent" index={1} />
-        <StatCard label="Giao dịch" value={dashboardStats.totalTransactions.toLocaleString("vi-VN")} delta="+24.1%" icon={ArrowLeftRight} accent="success" index={2} />
-        <StatCard label="Báo cáo chờ" value={String(dashboardStats.pendingReports)} delta="3 cần xử lý gấp" trend="down" icon={ShieldAlert} accent="warning" index={3} />
-        <StatCard label="Tiền lưu thông" value={formatVND(dashboardStats.totalCirculating)} delta="+5.7%" icon={Banknote} accent="primary" index={4} />
+        <StatCard label="Tổng người dùng" value={stats.totalUsers.toLocaleString("vi-VN")} delta="Số liệu hiện tại từ Firestore" icon={Users} accent="primary" index={0} />
+        <StatCard label="Tổng quỹ" value={stats.totalFunds.toLocaleString("vi-VN")} delta="Dựa trên quỹ hiện có" icon={Wallet} accent="accent" index={1} />
+        <StatCard label="Giao dịch" value={stats.totalTransactions.toLocaleString("vi-VN")} delta="Tổng giao dịch thực tế" icon={ArrowLeftRight} accent="success" index={2} />
+        <StatCard label="Báo cáo chờ" value={String(stats.pendingReports)} delta="Số báo cáo đang chờ xử lý" trend="down" icon={ShieldAlert} accent="warning" index={3} />
+        <StatCard label="Tiền lưu thông" value={formatVND(stats.totalCirculating)} delta="Tổng tiền trong hệ thống" icon={Banknote} accent="primary" index={4} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -113,7 +171,13 @@ function DashboardPage() {
             <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.92 0.02 310)" vertical={false} />
             <XAxis dataKey="day" stroke="oklch(0.5 0.04 305)" fontSize={12} />
             <YAxis stroke="oklch(0.5 0.04 305)" fontSize={12} />
-            <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid oklch(0.92 0.02 310)", background: "white" }} />
+            <Tooltip
+              contentStyle={{ borderRadius: 12, border: "1px solid oklch(0.92 0.02 310)", background: "white" }}
+              formatter={(value: any, _name: any) => {
+                const numericValue = typeof value === "number" ? value : Number(value) || 0;
+                return [numericValue.toLocaleString("vi-VN", { maximumFractionDigits: 2 }), "triệu VND"];
+              }}
+            />
             <Bar dataKey="volume" fill="url(#gBar)" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>

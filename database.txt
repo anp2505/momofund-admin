@@ -1,0 +1,157 @@
+Nhóm A — Xác thực & Người dùng
+
+Bảng users - Tài khoản người dùng hệ thống
+
+uid | string | PK | UUID định danh người dùng, do Firebase Auth cấp
+email | string | NN | Email đăng nhập, duy nhất trong hệ thống
+displayName | string | NN | Họ tên hiển thị của người dùng
+createdAt | timestamp | NN | Thời điểm tạo tài khoản
+avatarUrl | string | | URL ảnh đại diện, có thể null nếu chưa cập nhật
+phoneNumber | string | | Số điện thoại liên hệ (tùy chọn)
+accountStatus | string | NN | Trạng thái tài khoản: active, locked
+role | string | NN | Role hệ thống: user, admin. Mặc định user
+updatedAt | timestamp | | Lần cuối cập nhật thông tin
+lastLoginAt | timestamp | | Lần cuối đăng nhập thành công
+lockedAt | timestamp | | Thời điểm bị khóa tài khoản, null nếu đang hoạt động
+lockedReason | string | | Lý do khóa tài khoản do admin ghi nhận
+
+
+Nhóm B — Quản lý Quỹ
+
+Bảng funds - Thông tin quỹ nhóm
+
+fundId | string | PK | UUID định danh quỹ (document ID)
+ownerId | string | NN | Tham chiếu tới uid của chủ quỹ
+ownerName | string | NN | Tên hiển thị của chủ quỹ
+name | string | NN | Tên hiển thị của quỹ
+description | string | | Mô tả mục đích quỹ
+status | string | NN | Trạng thái: active, paused, closed
+balance | int64 | NN | Số dư hiện tại của quỹ. Mặc định 0
+memberCount | int64 | NN | Số lượng thành viên hiện tại. Mặc định 0
+code | string | UK | Mã mời duy nhất dùng để tham gia quỹ
+createdAt | timestamp | NN | Thời điểm tạo quỹ
+avatarUrl | string | | URL ảnh đại diện quỹ
+privacyType | string | NN | Chế độ: public (vào ngay) hoặc private (cần duyệt)
+targetAmount | int64 | | Mục tiêu số tiền cần đạt, có thể null nếu không đặt
+targetDeadline | timestamp | | Ngày deadline đạt mục tiêu
+maxBalance | int64 | NN | Số dư tối đa cho phép. Mặc định 50000000
+updatedAt | timestamp | | Lần cuối cập nhật thông tin quỹ
+closedAt | timestamp | | Thời điểm đóng quỹ, null nếu vẫn hoạt động
+
+
+Nhóm C — Quản lý Thành viên
+
+Bảng fundMembers - Quan hệ thành viên – quỹ & role trong quỹ
+
+memberId | string | PK | UUID định danh bản ghi thành viên (document ID)
+fundId | string | NN | Tham chiếu tới funds
+userId | string | NN | Tham chiếu tới users
+email | string | NN | Email của thành viên
+displayName | string | NN | Tên hiển thị của thành viên
+role | string | NN | Role trong quỹ: owner, deputy, member
+joinedAt | timestamp | NN | Thời điểm được chấp nhận vào quỹ
+memberStatus | string | NN | Trạng thái: active, left, removed
+leftAt | timestamp | | Thời điểm rời / bị xóa khỏi quỹ
+deputyGrantedAt | timestamp | | Thời điểm được ủy quyền làm deputy
+deputyRevokedAt | timestamp | | Thời điểm thu hồi quyền deputy
+totalContributed | int64 | NN | Tổng tiền thành viên đã góp vào quỹ. Mặc định 0
+
+Bảng joinRequests - Yêu cầu tham gia quỹ riêng tư
+
+requestId | string | PK | UUID định danh yêu cầu tham gia (document ID)
+fundId | string | NN | Tham chiếu tới funds
+userId | string | NN | Tham chiếu tới users. Người gửi yêu cầu
+userName | string | NN | Tên hiển thị của người gửi yêu cầu
+status | string | NN | Trạng thái: pending, approved, rejected
+approvedBy | string | | uid của người đã duyệt/từ chối
+approvedAt | timestamp | | Thời điểm xử lý yêu cầu
+createdAt | timestamp | NN | Thời điểm gửi yêu cầu
+
+
+Nhóm D — Tài chính Quỹ
+
+Bảng transactions - Toàn bộ giao dịch tài chính của quỹ
+
+transactionId | string | PK | UUID định danh giao dịch (document ID)
+fundId | string | NN | Tham chiếu tới funds
+userId | string | NN | Tham chiếu tới users. Người thực hiện giao dịch
+userName | string | NN | Tên hiển thị của người thực hiện
+type | string | NN | Loại: contribution, withdrawal, expense
+amount | int64 | NN | Số tiền giao dịch, luôn dương
+note | string | | Ghi chú của người thực hiện giao dịch
+status | string | NN | Trạng thái: completed, pending, rejected
+balanceBefore | int64 | NN | Số dư quỹ trước khi giao dịch (để audit)
+balanceAfter | int64 | NN | Số dư quỹ sau khi giao dịch (để audit)
+referenceId | string | | Tham chiếu tới withdrawRequests nếu là giao dịch rút tiền được duyệt
+createdAt | timestamp | NN | Thời điểm phát sinh giao dịch
+
+Bảng withdrawRequests - Yêu cầu rút tiền từ thành viên
+
+requestId | string | PK | UUID định danh yêu cầu rút tiền (document ID)
+fundId | string | NN | Tham chiếu tới funds
+requesterId | string | NN | Tham chiếu tới users. Thành viên gửi yêu cầu
+requesterName | string | NN | Tên hiển thị của người gửi yêu cầu
+amount | int64 | NN | Số tiền yêu cầu rút
+reason | string | NN | Lý do rút tiền do thành viên nhập
+status | string | NN | Trạng thái: pending, approved, rejected
+approvedBy | string | | uid của người đã xử lý
+reviewNote | string | | Ghi chú khi duyệt hoặc từ chối
+approvedAt | timestamp | | Thời điểm xử lý yêu cầu
+createdAt | timestamp | NN | Thời điểm gửi yêu cầu
+
+
+Nhóm E — Nhắc nhở & Thông báo
+
+Bảng reminders - Lời nhắc góp quỹ thủ công & định kỳ
+
+reminderId | string | PK | UUID định danh lời nhắc (document ID)
+fundId | string | NN | Tham chiếu tới funds
+createdBy | string | NN | Tham chiếu tới uid của chủ quỹ tạo lời nhắc
+reminderType | string | NN | Loại: manual (thủ công 1 lần) hoặc scheduled (định kỳ)
+message | string | | Nội dung lời nhắc tùy chỉnh
+scheduleType | string | | Chu kỳ nếu là scheduled: weekly, monthly
+scheduleDay | int64 | | Ngày gửi: 1–7 nếu weekly (thứ), 1–28 nếu monthly (ngày)
+scheduleHour | int64 | | Giờ gửi nhắc (0–23)
+reminderStatus | string | NN | Trạng thái: active, cancelled
+sentAt | timestamp | | Thời điểm gửi lần gần nhất (manual: một lần duy nhất)
+createdAt | timestamp | NN | Thời điểm tạo lời nhắc
+
+Bảng notifications - Thông báo realtime đến từng người dùng
+
+notificationId | string | PK | UUID định danh thông báo (document ID)
+userId | string | NN | Tham chiếu tới users. Người nhận thông báo
+fundId | string | | Tham chiếu tới funds. Quỹ liên quan (có thể null)
+type | string | NN | Loại: contribution, withdrawal_request, withdrawal_approved, withdrawal_rejected, join_request, join_approved, join_rejected, reminder, fund_closed, deputy_granted, deputy_revoked, member_removed
+title | string | NN | Tiêu đề thông báo hiển thị
+body | string | | Nội dung chi tiết thông báo
+read | boolean | NN | false = chưa đọc, true = đã đọc. Mặc định false
+referenceId | string | | ID của đối tượng liên quan (transactionId, requestId…)
+createdAt | timestamp | NN | Thời điểm tạo thông báo
+readAt | timestamp | | Thời điểm người dùng đọc thông báo
+
+
+Nhóm F — Quản trị hệ thống
+
+Bảng reports - Báo cáo vi phạm từ người dùng
+
+reportId | string | PK | UUID định danh báo cáo (document ID)
+reporterId | string | NN | Tham chiếu tới users. Người gửi báo cáo
+targetType | string | NN | Đối tượng báo cáo: user hoặc fund
+targetId | string | NN | ID của user hoặc fund bị báo cáo
+reason | string | NN | Lý do và mô tả vi phạm từ người báo cáo
+reportStatus | string | NN | Trạng thái: pending, resolved, dismissed
+handledBy | string | | Tham chiếu tới users. Admin xử lý
+resolutionNote | string | | Ghi chú kết quả xử lý từ admin
+handledAt | timestamp | | Thời điểm xử lý báo cáo
+createdAt | timestamp | NN | Thời điểm gửi báo cáo
+
+Bảng activityLogs - Audit log toàn bộ hành động quan trọng trong hệ thống
+
+logId | string | PK | UUID định danh log (document ID)
+actorId | string | NN | Tham chiếu tới users. Người thực hiện hành động
+action | string | NN | Mã hành động: lock_user, approve_withdrawal, grant_deputy, close_fund, resolve_report…
+targetType | string | | Loại đối tượng bị tác động: user, fund, transaction, report
+targetId | string | | ID của đối tượng bị tác động
+detail | string | | Chi tiết mô tả hành động (giá trị cũ → mới)
+ipAddress | string | | Địa chỉ IP nơi thực hiện hành động
+createdAt | timestamp | NN | Thời điểm ghi log

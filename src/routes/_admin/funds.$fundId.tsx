@@ -1,7 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Users as UsersIcon, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeft, Users as UsersIcon, ArrowDownCircle, ArrowUpCircle, Loader } from "lucide-react";
 import { motion } from "motion/react";
-import { funds, users, formatVND, formatDate, formatDateTime } from "@/lib/mock-data";
+import {
+  fetchFundById,
+  fetchMembersByFundId,
+  fetchTransactionsByFundId,
+  fetchTransactionStats,
+  formatVND,
+  formatDate,
+  formatDateTime,
+  type Fund,
+  type FundMember,
+  type Transaction,
+} from "@/lib/mock-data";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,16 +27,54 @@ export const Route = createFileRoute("/_admin/funds/$fundId")({
 function FundDetail() {
   const { fundId } = Route.useParams();
   const navigate = useNavigate();
-  const fund = funds.find(f => f.fund_id === fundId);
-  if (!fund) return <div>Không tìm thấy quỹ</div>;
+  const [loading, setLoading] = useState(true);
+  const [fund, setFund] = useState<Fund | null>(null);
+  const [members, setMembers] = useState<FundMember[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionStats, setTransactionStats] = useState({ totalTransactions: 0, totalAmount: 0 });
+
+  useEffect(() => {
+    const loadFund = async () => {
+      try {
+        setLoading(true);
+        const fundData = await fetchFundById(fundId);
+        if (!fundData) {
+          navigate({ to: "/funds" });
+          return;
+        }
+        setFund(fundData);
+
+        const [membersData, txData, txStats] = await Promise.all([
+          fetchMembersByFundId(fundId),
+          fetchTransactionsByFundId(fundId),
+          fetchTransactionStats(fundId),
+        ]);
+
+        setMembers(membersData);
+        setTransactions(txData);
+        setTransactionStats(txStats);
+      } catch (error) {
+        console.error("Error loading fund:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadFund();
+  }, [fundId, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader className="size-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!fund) {
+    return <div className="p-4 text-center text-muted-foreground">Không tìm thấy quỹ</div>;
+  }
+
   const pct = Math.min(100, Math.round((fund.current_balance / fund.target_amount) * 100));
-  const members = users.slice(0, fund.members_count > 8 ? 8 : fund.members_count);
-  const txs = Array.from({ length: 6 }, (_, i) => ({
-    id: `t${i}`, type: i % 2 === 0 ? "DEPOSIT" : "WITHDRAW",
-    amount: Math.floor(Math.random() * 5000000) + 100000,
-    actor: users[i % users.length],
-    when: new Date(Date.now() - i * 86400000 * 2).toISOString(),
-  }));
 
   return (
     <div className="space-y-6">
@@ -78,22 +128,24 @@ function FundDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 grid gap-4 md:grid-cols-3">
-          <StatBlock label="Tổng giao dịch" value={"284"} />
-          <StatBlock label="Tổng tiền góp" value={formatVND(fund.current_balance * 1.4)} />
+          <StatBlock label="Tổng giao dịch" value={String(transactionStats.totalTransactions)} />
+          <StatBlock label="Tổng tiền góp" value={formatVND(transactionStats.totalAmount)} />
           <StatBlock label="Thành viên" value={String(fund.members_count)} />
         </TabsContent>
 
         <TabsContent value="members" className="mt-4">
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-card">
             <div className="grid gap-3 md:grid-cols-2">
-              {members.map(m => (
+              {members.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">Không có thành viên</div>
+              ) : members.map(m => (
                 <div key={m.user_id} className="flex items-center gap-3 rounded-xl border border-border/50 p-3">
-                  <Avatar><AvatarImage src={m.avatar_url} /><AvatarFallback>{m.full_name[0]}</AvatarFallback></Avatar>
+                  <Avatar><AvatarImage src={m.user_avatar_url} /><AvatarFallback>{m.user_name?.[0] ?? "?"}</AvatarFallback></Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate font-medium">{m.full_name}</p>
-                    <p className="text-xs text-muted-foreground">Đóng góp: {formatVND(m.total_contributed / 5)}</p>
+                    <p className="truncate font-medium">{m.user_name}</p>
+                    <p className="text-xs text-muted-foreground">Đóng góp: {formatVND(m.contribution_amount ?? 0)}</p>
                   </div>
-                  <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">MEMBER</span>
+                  <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">{m.role ?? "MEMBER"}</span>
                 </div>
               ))}
             </div>
@@ -103,17 +155,19 @@ function FundDetail() {
         <TabsContent value="transactions" className="mt-4">
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-card">
             <ul className="space-y-2">
-              {txs.map(t => (
-                <li key={t.id} className="flex items-center gap-3 rounded-xl p-3 hover:bg-muted/40">
-                  <div className={`flex size-10 items-center justify-center rounded-xl ${t.type === "DEPOSIT" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
-                    {t.type === "DEPOSIT" ? <ArrowDownCircle className="size-5" /> : <ArrowUpCircle className="size-5" />}
+              {transactions.length === 0 ? (
+                <li className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">Không có giao dịch cho quỹ này</li>
+              ) : transactions.map(tx => (
+                <li key={tx.transaction_id} className="flex items-center gap-3 rounded-xl p-3 hover:bg-muted/40">
+                  <div className={`flex size-10 items-center justify-center rounded-xl ${tx.type === "DEPOSIT" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
+                    {tx.type === "DEPOSIT" ? <ArrowDownCircle className="size-5" /> : <ArrowUpCircle className="size-5" />}
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium">{t.type === "DEPOSIT" ? "Nạp quỹ" : "Rút quỹ"} — {t.actor.full_name}</p>
-                    <p className="text-xs text-muted-foreground">{formatDateTime(t.when)}</p>
+                    <p className="text-sm font-medium">{tx.type === "DEPOSIT" ? "Nạp quỹ" : "Rút quỹ"} — {tx.user_name || tx.user_id}</p>
+                    <p className="text-xs text-muted-foreground">{formatDateTime(tx.created_at)}</p>
                   </div>
-                  <span className={`font-semibold ${t.type === "DEPOSIT" ? "text-success" : "text-destructive"}`}>
-                    {t.type === "DEPOSIT" ? "+" : "-"}{formatVND(t.amount)}
+                  <span className={`font-semibold ${tx.type === "DEPOSIT" ? "text-success" : "text-destructive"}`}>
+                    {tx.type === "DEPOSIT" ? "+" : "-"}{formatVND(tx.amount)}
                   </span>
                 </li>
               ))}
