@@ -17,6 +17,8 @@ import {
   fetchUsers, fetchFunds, fetchReports, fetchUserGrowthData, fetchTransactionVolumeData, fetchFundStatusData, fetchDashboardStats,
   formatVND, formatDateTime, type User, type Fund, type Report,
 } from "@/lib/mock-data";
+import { DateRangePicker } from "@/components/admin/DateRangePicker";
+import type { DateRange } from "react-day-picker";
 
 export const Route = createFileRoute("/_admin/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — MomoFund Admin" }] }),
@@ -32,20 +34,20 @@ function DashboardPage() {
   const [userGrowthData, setUserGrowthData] = useState<any[]>([]);
   const [transactionVolumeData, setTransactionVolumeData] = useState<any[]>([]);
   const [fundStatusData, setFundStatusData] = useState<any[]>([]);
+  const [date, setDate] = useState<DateRange | undefined>();
 
   useEffect(() => {
-    let unsub: (() => void) | undefined;
     const loadData = async () => {
       try {
         setLoading(true);
         const [users, funds, reports, statsData, userGrowth, txVolume, fundStatus] = await Promise.all([
-          fetchUsers(),
-          fetchFunds(),
-          fetchReports(),
-          fetchDashboardStats(),
-          fetchUserGrowthData(),
-          fetchTransactionVolumeData(),
-          fetchFundStatusData(),
+          fetchUsers(date?.from, date?.to),
+          fetchFunds(date?.from, date?.to),
+          fetchReports(date?.from, date?.to),
+          fetchDashboardStats(date?.from, date?.to),
+          fetchUserGrowthData(date?.from, date?.to),
+          fetchTransactionVolumeData(date?.from, date?.to),
+          fetchFundStatusData(date?.from, date?.to),
         ]);
 
         setRecentUsers(users.slice(0, 4));
@@ -62,18 +64,16 @@ function DashboardPage() {
       }
     };
 
-    // Only load when authenticated (Firestore rules likely require auth)
-    unsub = onAuthStateChanged(auth, (user) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
       if (user) {
         loadData();
       } else {
-        // not authenticated: stop loading and leave stats at 0
         setLoading(false);
       }
     });
 
-    return () => unsub?.();
-  }, []);
+    return () => unsub();
+  }, [date]);
 
   if (loading) {
     return (
@@ -85,11 +85,14 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold tracking-tight">Tổng quan hệ thống</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Chào mừng trở lại 👋 Đây là tình hình MomoFund hôm nay.
-        </p>
+      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Tổng quan hệ thống</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Chào mừng trở lại 👋 Đây là tình hình MomoFund hôm nay.
+          </p>
+        </div>
+        <DateRangePicker date={date} setDate={setDate} />
       </motion.div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">

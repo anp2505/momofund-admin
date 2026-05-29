@@ -2,14 +2,25 @@ import { collection, getDocs, query, where, getDoc, doc, updateDoc, Timestamp } 
 import { db } from "@/lib/firebase";
 import type { Report, ReportStatus } from "@/lib/mock-data";
 
-export async function fetchReports(): Promise<Report[]> {
+export async function fetchReports(startDate?: Date, endDate?: Date): Promise<Report[]> {
   try {
     const reportsRef = collection(db, "reports");
     const querySnapshot = await getDocs(reportsRef);
-    return querySnapshot.docs.map(doc => ({
+    let reports = querySnapshot.docs.map(doc => ({
       report_id: doc.id,
       ...doc.data()
     } as Report));
+    
+    if (startDate || endDate) {
+      reports = reports.filter(r => {
+        if (!r.created_at) return true;
+        const d = new Date(r.created_at);
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+      });
+    }
+    return reports;
   } catch (error) {
     console.error("Error fetching reports:", error);
     return [];

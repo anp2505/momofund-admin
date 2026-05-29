@@ -82,7 +82,7 @@ function FundsPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((f, i) => {
-          const pct = Math.min(100, Math.round((f.current_balance / f.target_amount) * 100));
+          const pct = f.target_amount > 0 ? Math.min(100, Math.round((f.current_balance / f.target_amount) * 100)) : 0;
           return (
             <motion.div key={f.fund_id}
               initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
