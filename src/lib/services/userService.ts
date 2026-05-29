@@ -17,38 +17,86 @@ function docToUser(docSnap: { id: string; data: () => Record<string, unknown> })
     return undefined;
   };
 
-  const created = get<any>("created_at", "createdAt");
+  const created = get<any>("createdAt", "created_at");
   const createdStr = created instanceof Timestamp ? created.toDate().toISOString() : (typeof created === "string" ? created : "");
-  const lastLogin = get<any>("last_login_at", "lastLoginAt");
+  const lastLogin = get<any>("lastLoginAt", "last_login_at");
   const lastLoginStr = lastLogin instanceof Timestamp ? lastLogin.toDate().toISOString() : (typeof lastLogin === "string" ? lastLogin : "");
-  const locked = get<any>("locked_at", "lockedAt");
+  const locked = get<any>("lockedAt", "locked_at");
   const lockedStr = locked instanceof Timestamp ? locked.toDate().toISOString() : (typeof locked === "string" ? locked : undefined);
   const toNumber = (v: unknown) => typeof v === "number" ? v : (typeof v === "string" && v !== "" ? Number(v) || 0 : 0);
 
   return {
     user_id: docSnap.id,
     email: (get<string>("email") as string) ?? "",
-    full_name: (get<string>("full_name", "fullName") as string) ?? "",
-    avatar_url: (get<string>("avatar_url", "avatarUrl") as string) ?? "",
-    phone_number: (get<string>("phone_number", "phoneNumber") as string) ?? "",
-    account_status: (get<string>("account_status", "accountStatus") as User["account_status"]) ?? "ACTIVE",
+    full_name: (get<string>("displayName", "fullName", "full_name") as string) ?? "",
+    avatar_url: (get<string>("photoURL", "avatarUrl", "avatar_url") as string) ?? "",
+    phone_number: (get<string>("phoneNumber", "phone_number") as string) ?? "",
+    account_status: (get<string>("status", "accountStatus", "account_status") as User["account_status"]) ?? "ACTIVE",
     role: (get<string>("role") as User["role"]) ?? "USER",
     created_at: createdStr,
     last_login_at: lastLoginStr,
     locked_at: lockedStr,
-    locked_reason: get<string>("locked_reason", "lockedReason") as string | undefined,
-    total_contributed: toNumber(get<unknown>("total_contributed", "totalContributed")),
-    funds_joined: toNumber(get<unknown>("funds_joined", "fundsJoined")),
+    locked_reason: get<string>("lockedReason", "locked_reason") as string | undefined,
+    total_contributed: toNumber(get<unknown>("totalContributed", "total_contributed")),
+    funds_joined: toNumber(get<unknown>("fundsJoined", "funds_joined")),
   };
 }
 
 /**
  * Lấy tất cả người dùng từ Firestore
  */
-export async function fetchUsers(): Promise<User[]> {
+export async function fetchUsers(startDate?: Date, endDate?: Date): Promise<User[]> {
   try {
-    const snap = await getDocs(collection(db, "users"));
-    return snap.docs.map(docToUser);
+    const [snap, txSnap] = await Promise.all([
+      getDocs(collection(db, "users")),
+      getDocs(collection(db, "transactions"))
+    ]);
+    
+    // Aggregate contributions and funds joined from transactions
+    const userContributions = new Map<string, number>();
+    const userFunds = new Map<string, Set<string>>();
+    
+    txSnap.docs.forEach(txDoc => {
+      const data = txDoc.data();
+      if (data.type === "contribution" && data.status === "completed") {
+        const uid = data.userId;
+        const fid = data.fundId;
+        if (uid) {
+          const amt = Number(data.amount) || 0;
+          userContributions.set(uid, (userContributions.get(uid) || 0) + amt);
+          if (fid) {
+            if (!userFunds.has(uid)) userFunds.set(uid, new Set());
+            userFunds.get(uid)!.add(fid);
+          }
+        }
+      }
+    });
+
+    let users = snap.docs.map(doc => {
+      const u = docToUser(doc);
+      if (userContributions.has(u.user_id)) {
+        u.total_contributed = userContributions.get(u.user_id)!;
+      }
+      if (userFunds.has(u.user_id)) {
+        u.funds_joined = userFunds.get(u.user_id)!.size;
+      }
+      return u;
+    });
+    
+    if (startDate || endDate) {
+      users = users.filter(u => {
+        if (!u.created_at) return true;
+        
+        // parse date properly
+        const d = new Date(u.created_at);
+        if (isNaN(d.getTime())) return true;
+        
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+      });
+    }
+    return users;
   } catch (error) {
     console.error("Error fetching users:", error);
     return [];

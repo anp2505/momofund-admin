@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -39,7 +39,12 @@ function LoginPage() {
             <input value={email} onChange={e => setEmail(e.target.value)} type="email" required className="w-full rounded-md border px-3 py-2" />
           </div>
           <div>
-            <label className="block text-sm text-muted-foreground mb-1">Mật khẩu</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm text-muted-foreground">Mật khẩu</label>
+              <Link to="/forgot-password" className="text-xs text-primary hover:underline font-medium">
+                Quên mật khẩu?
+              </Link>
+            </div>
             <input value={password} onChange={e => setPassword(e.target.value)} type="password" required className="w-full rounded-md border px-3 py-2" />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -49,6 +54,12 @@ function LoginPage() {
             </button>
           </div>
         </form>
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          Chưa có tài khoản?{" "}
+          <Link to="/register" className="text-primary hover:underline font-medium">
+            Đăng ký ngay
+          </Link>
+        </div>
       </div>
     </div>
   );
