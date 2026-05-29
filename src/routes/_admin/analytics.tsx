@@ -6,6 +6,8 @@ import {
 } from "recharts";
 import { fetchUserGrowthData, fetchTransactionVolumeData, fetchFundStatusData, fetchUsers } from "@/lib/mock-data";
 import { Loader } from "lucide-react";
+import { DateRangePicker } from "@/components/admin/DateRangePicker";
+import type { DateRange } from "react-day-picker";
 
 export const Route = createFileRoute("/_admin/analytics")({
   head: () => ({ meta: [{ title: "Thống kê hệ thống — MomoFund Admin" }] }),
@@ -18,16 +20,17 @@ function AnalyticsPage() {
   const [transactionVolumeData, setTransactionVolumeData] = useState<any[]>([]);
   const [fundStatusData, setFundStatusData] = useState<any[]>([]);
   const [userStats, setUserStats] = useState({ active: 0, locked: 0, admin: 0, inactive: 0 });
+  const [date, setDate] = useState<DateRange | undefined>();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         const [users, userGrowth, txVolume, fundStatus] = await Promise.all([
-          fetchUsers(),
-          fetchUserGrowthData(),
-          fetchTransactionVolumeData(),
-          fetchFundStatusData(),
+          fetchUsers(date?.from, date?.to),
+          fetchUserGrowthData(date?.from, date?.to),
+          fetchTransactionVolumeData(date?.from, date?.to),
+          fetchFundStatusData(date?.from, date?.to),
         ]);
         setUserGrowthData(userGrowth);
         setTransactionVolumeData(txVolume);
@@ -55,7 +58,7 @@ function AnalyticsPage() {
       }
     };
     loadData();
-  }, []);
+  }, [date]);
 
   if (loading) {
     return (
@@ -67,9 +70,12 @@ function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Thống kê hệ thống</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Phân tích chi tiết hiệu suất MomoFund</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Thống kê hệ thống</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Phân tích chi tiết hiệu suất MomoFund</p>
+        </div>
+        <DateRangePicker date={date} setDate={setDate} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

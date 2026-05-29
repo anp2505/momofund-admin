@@ -23,7 +23,9 @@ async function debug() {
         console.log(`${name}: ${snap.size} documents`);
         if (snap.size > 0) {
           const d = snap.docs[0].data();
-          console.log(`  sample keys: ${Object.keys(d).slice(0,20).join(', ')}`);
+          if (name === "users") console.log(`  user: ${JSON.stringify(d)}`);
+          if (name === "funds") console.log(`  fund: ${JSON.stringify(d)}`);
+          if (name === "transactions") console.log(`  tx: ${JSON.stringify(d)}`);
         }
       } catch (e) {
         console.error(`Error reading ${name}:`, e && e.message ? e.message : e);

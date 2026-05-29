@@ -18,7 +18,7 @@ function docToFund(docSnap: { id: string; data: () => Record<string, unknown> })
     return undefined;
   };
 
-  const created = get<any>("created_at", "createdAt");
+  const created = get<any>("createdAt", "created_at");
   const createdStr = created instanceof Timestamp
     ? created.toDate().toISOString()
     : (typeof created === "string" ? created : undefined) ?? "";
@@ -27,27 +27,42 @@ function docToFund(docSnap: { id: string; data: () => Record<string, unknown> })
 
   return {
     fund_id: docSnap.id,
-    owner_id: (get<string>("owner_id", "ownerId") as string) ?? "",
-    owner_name: (get<string>("owner_name", "ownerName") as string) ?? "",
-    fund_name: (get<string>("fund_name", "fundName") as string) ?? "",
+    owner_id: (get<string>("ownerId", "owner_id") as string) ?? "",
+    owner_name: (get<string>("ownerName", "owner_name") as string) ?? "",
+    fund_name: (get<string>("name", "fundName", "fund_name") as string) ?? "",
     description: (get<string>("description") as string) ?? "",
-    avatar_url: (get<string>("avatar_url", "avatarUrl") as string) ?? "",
-    privacy_type: (get<string>("privacy_type", "privacyType") as Fund["privacy_type"]) ?? "PUBLIC",
-    fund_status: (get<string>("fund_status", "fundStatus") as Fund["fund_status"]) ?? "ACTIVE",
-    target_amount: toNumber(get<unknown>("target_amount", "targetAmount")),
-    current_balance: toNumber(get<unknown>("current_balance", "currentBalance")),
+    avatar_url: (get<string>("photoURL", "avatarUrl", "avatar_url") as string) ?? "",
+    privacy_type: (get<string>("privacyType", "privacy_type") as Fund["privacy_type"]) ?? "PUBLIC",
+    fund_status: (get<string>("status", "fundStatus", "fund_status") as Fund["fund_status"]) ?? "ACTIVE",
+    target_amount: toNumber(get<unknown>("targetAmount", "target_amount")),
+    current_balance: toNumber(get<unknown>("balance", "currentBalance", "current_balance")),
     created_at: createdStr,
-    members_count: toNumber(get<unknown>("members_count", "membersCount")),
+    members_count: toNumber(get<unknown>("memberCount", "membersCount", "members_count")),
   };
 }
 
 /**
  * Lấy tất cả quỹ từ Firestore
  */
-export async function fetchFunds(): Promise<Fund[]> {
+export async function fetchFunds(startDate?: Date, endDate?: Date): Promise<Fund[]> {
   try {
     const snap = await getDocs(collection(db, "funds"));
-    return snap.docs.map(docToFund);
+    let funds = snap.docs.map(docToFund);
+    
+    if (startDate || endDate) {
+      funds = funds.filter(f => {
+        if (!f.created_at) return true;
+        
+        // parse date properly
+        const d = new Date(f.created_at);
+        if (isNaN(d.getTime())) return true;
+        
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+      });
+    }
+    return funds;
   } catch (error) {
     console.error("Error fetching funds:", error);
     return [];

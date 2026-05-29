@@ -93,14 +93,32 @@ export { fetchTransactionsByFundId, fetchTransactionStats } from "@/lib/services
 
 
 
+function parseAnyDate(iso: string): Date {
+  const d = new Date(iso);
+  if (!isNaN(d.getTime())) return d;
+  
+  // Try DD/MM/YYYY
+  const match = String(iso).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (match) {
+    return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
+  }
+  return new Date(NaN);
+}
+
 export function formatVND(n: number) {
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(n || 0);
 }
 
 export function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  if (!iso) return "N/A";
+  const d = parseAnyDate(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 export function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  if (!iso) return "N/A";
+  const d = parseAnyDate(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
